@@ -1,0 +1,59 @@
+/* Angular Material Theme and global styles matching provided UI */
+@use '@angular/material' as mat;
+
+// Brand colors
+$brand-green: #1DBA75; // primary (buttons, highlights)
+$brand-green-700: #14946A; // darker variant
+$brand-orange: #F5A25A; // accent (logo accent)
+$brand-bg: #F4F6F8; // page background
+$brand-surface: #FFFFFF; // cards/surfaces
+$brand-muted: #E6EAEE; // borders
+
+$primary: mat.m2-define-palette(mat.$m2-green-palette, 600, 700, 800);
+$accent: mat.m2-define-palette(mat.$m2-orange-palette, 400, 500, 600);
+$warn: mat.m2-define-palette(mat.$m2-red-palette);
+
+$theme: mat.m2-define-light-theme((
+  color: (
+    primary: $primary,
+    accent: $accent,
+    warn: $warn,
+  ),
+  typography: mat.m2-define-typography-config(),
+));
+
+@include mat.all-component-themes($theme);
+
+:root {
+  --brand-green: #1DBA75;
+  --brand-green-700: #14946A;
+  --brand-orange: #F5A25A;
+  --brand-bg: #F4F6F8;
+  --brand-surface: #FFFFFF;
+  --brand-muted: #E6EAEE;
+  --brand-text: #1F2D3D;
+}
+
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--brand-bg);
+  color: var(--brand-text);
+}
+
+// Utility classes
+.elevated {
+  background: var(--brand-surface);
+  border: 1px solid var(--brand-muted);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.btn-primary {
+  background-color: var(--brand-green) !important;
+  color: #fff !important;
+}
+
+.accent-text { color: var(--brand-orange); }
+.primary-text { color: var(--brand-green-700); }
