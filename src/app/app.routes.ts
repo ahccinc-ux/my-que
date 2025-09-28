@@ -36,5 +36,8 @@ export const routes: Routes = [
     pathMatch: 'full',
     redirectTo: 'dashboard'
   },
-  { path: '**', redirectTo: 'login' }
+  {
+    path: '**',
+    loadComponent: () => import('./pages/not-found/not-found').then(m => m.NotFound)
+  }
 ];
