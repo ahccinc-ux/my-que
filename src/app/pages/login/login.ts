@@ -40,7 +40,7 @@ import { Auth } from '../../core/auth';
           <button mat-raised-button color="primary" class="submit-btn btn-primary" [disabled]="form.invalid">Sign in</button>
         </form>
       </div>
-      <div class="login-hero"></div>
+      <div class="login-hero" [style.background-image]="'url(' + assetUrl('assets/secondonboard.png') + ')'"></div>
     </div>
   `,
   styles: `
@@ -54,12 +54,11 @@ import { Auth } from '../../core/auth';
     .full { width: 100%; }
     .submit-btn { width: 140px; align-self: start; }
     .login-hero {
-      background-color: var(--brand-green-700);
+      background-color: var(--brand-green-100);
       opacity: 0.95;
-      background-image: url('/assets/secondonboard.svg');
       background-repeat: no-repeat;
       background-position: center;
-      background-size: contain; /* scale SVG to fit while preserving aspect */
+      background-size: contain;
     }
     @media (max-width: 900px) {
       .login-container { grid-template-columns: 1fr; }
@@ -80,6 +79,10 @@ export class Login {
   });
 
   toggleHide() { this.hide.set(!this.hide()); }
+
+  assetUrl(rel: string) {
+    return new URL(rel, document.baseURI).toString();
+  }
   onSubmit() {
     if (this.form.valid) {
       const ok = this.auth.login(this.form.value.email!, this.form.value.password!);
