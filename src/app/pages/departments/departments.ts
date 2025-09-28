@@ -5,8 +5,6 @@ import { Topbar } from '../../components/layout/topbar/topbar';
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
@@ -30,8 +28,6 @@ interface DepartmentRow {
     ReactiveFormsModule,
     MatFormFieldModule,
     MatInputModule,
-    MatDatepickerModule,
-    MatNativeDateModule,
     MatSelectModule,
     MatTableModule,
     MatPaginatorModule,
@@ -44,20 +40,8 @@ interface DepartmentRow {
       <app-sidebar />
       <div class="content-area">
         <app-topbar />
-
         <form class="filters elevated" [formGroup]="filters">
-          <div class="pill"></div>
           <div class="inputs">
-            <mat-form-field appearance="outline">
-              <mat-label>Date From</mat-label>
-              <input matInput [matDatepicker]="fromPicker" formControlName="from" />
-              <mat-datepicker #fromPicker></mat-datepicker>
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>Date To</mat-label>
-              <input matInput [matDatepicker]="toPicker" formControlName="to" />
-              <mat-datepicker #toPicker></mat-datepicker>
-            </mat-form-field>
             <mat-form-field appearance="outline">
               <mat-label>Select Branch</mat-label>
               <mat-select formControlName="branch">
@@ -139,7 +123,7 @@ interface DepartmentRow {
     .content-area { padding: 12px; display: grid; grid-template-rows: auto auto 1fr; gap: 12px; }
     .filters { padding: 12px; display: grid; grid-template-columns: 160px 1fr auto; align-items: center; gap: 12px; }
     .filters .pill { height: 40px; background: var(--brand-green); border-radius: 8px; }
-    .inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .inputs { display: grid; grid-template-columns: 1fr; gap: 12px; }
     .actions { display: flex; gap: 8px; justify-content: end; }
     .card { padding: 12px; }
     .card-title { font-weight: 800; margin-bottom: 8px; }
@@ -168,8 +152,6 @@ export class Departments implements AfterViewInit {
 
   constructor(private fb: FormBuilder) {
     this.filters = this.fb.group({
-      from: [null],
-      to: [null],
       branch: [this.branches[0]]
     });
   }
@@ -186,7 +168,7 @@ export class Departments implements AfterViewInit {
   }
 
   resetFilters() {
-    this.filters.reset({ from: null, to: null, branch: null });
+    this.filters.reset({ branch: null });
     this.dataSource.filter = '';
   }
 }

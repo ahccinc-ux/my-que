@@ -1,13 +1,15 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { Router, NavigationEnd } from '@angular/router';
+import { filter } from 'rxjs/operators';
 
 @Component({
   selector: 'app-topbar',
   imports: [MatIconModule, MatButtonModule],
   template: `
     <header class="topbar elevated">
-      <div class="crumbs">Home / CRM</div>
+      <div class="crumbs">Home / {{ moduleName }}</div>
       <div class="actions">
         <button mat-icon-button aria-label="notifications">
           <mat-icon>notifications</mat-icon>
@@ -37,5 +39,37 @@ import { MatButtonModule } from '@angular/material/button';
   `
 })
 export class Topbar {
+  private router = inject(Router);
+  moduleName = this.computeModuleName(this.router.url);
 
+  constructor() {
+    this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(ev => {
+        this.moduleName = this.computeModuleName(ev.urlAfterRedirects || ev.url);
+      });
+  }
+
+  private computeModuleName(url: string): string {
+    try {
+      const path = (url || '').split('?')[0];
+      const parts = path.split('/').filter(Boolean);
+      const last = parts[parts.length - 1] || '';
+      if (!last || last === 'home') return 'Home';
+      // Map known routes to desired labels (e.g., singularize Departments)
+      const labelMap: Record<string, string> = {
+        dashboard: 'Dashboard',
+        login: 'Login',
+        departments: 'Department',
+        branches: 'Branches',
+        employees: 'Employees',
+        queues: 'Que Management'
+      };
+      if (labelMap[last.toLowerCase()]) return labelMap[last.toLowerCase()];
+      // Fallback: Title-case last segment
+      return last.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    } catch {
+      return 'Home';
+    }
+  }
 }

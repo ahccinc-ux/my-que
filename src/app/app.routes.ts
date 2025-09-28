@@ -22,6 +22,16 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/departments/departments').then(m => m.Departments)
   },
   {
+    path: 'queues',
+    canActivate: [() => import('./core/auth-guard').then(m => m.authGuard)],
+    loadComponent: () => import('./pages/queues/queues').then(m => m.Queues)
+  },
+  {
+    path: 'employees',
+    canActivate: [() => import('./core/auth-guard').then(m => m.authGuard)],
+    loadComponent: () => import('./pages/employees/employees').then(m => m.Employees)
+  },
+  {
     path: 'home',
     pathMatch: 'full',
     redirectTo: 'dashboard'

@@ -43,9 +43,6 @@ interface BranchRow {
       <app-sidebar />
       <div class="content-area">
         <app-topbar />
-
-        <div class="breadcrumb">Home / CRM / <span class="here">Branches</span></div>
-
         <form class="filters elevated" [formGroup]="filters">
           <mat-form-field appearance="outline" class="branch-field">
             <mat-label>Select Branch</mat-label>
