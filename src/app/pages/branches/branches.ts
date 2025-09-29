@@ -1,18 +1,20 @@
-import { Component, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Sidebar } from '../../components/layout/sidebar/sidebar';
 import { Topbar } from '../../components/layout/topbar/topbar';
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MockStore, BranchItem } from '../../core/mock-store';
+import { BranchDialog, BranchDialogData } from '../../components/dialogs/branch-dialog';
+import { ConfirmDialog } from '../../components/dialogs/confirm-dialog';
 
 interface BranchRow {
   branch: string; hours: string; departments: number; peak: string; staff: number;
@@ -29,14 +31,13 @@ interface BranchRow {
     ReactiveFormsModule,
     MatFormFieldModule,
     MatInputModule,
-    MatDatepickerModule,
-    MatNativeDateModule,
     MatSelectModule,
     MatTableModule,
     MatPaginatorModule,
     MatSortModule,
     MatButtonModule,
-    MatIconModule
+    MatIconModule,
+    MatDialogModule
   ],
   template: `
     <div class="layout">
@@ -56,6 +57,10 @@ interface BranchRow {
               Apply
             </button>
             <button mat-button type="button" (click)="resetFilters()">Reset</button>
+            <button mat-raised-button color="accent" type="button" (click)="openAdd()">
+              <mat-icon>add</mat-icon>
+              Add Branch
+            </button>
           </div>
         </form>
 
@@ -109,6 +114,17 @@ interface BranchRow {
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>Avg Duration</th>
                 <td mat-cell *matCellDef="let row">{{ row.avgDuration }}</td>
               </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef>Actions</th>
+                <td mat-cell *matCellDef="let r">
+                  <button mat-icon-button color="primary" (click)="openEdit(r)" aria-label="Edit">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="confirmDelete(r)" aria-label="Delete">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </td>
+              </ng-container>
 
               <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
               <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
@@ -138,23 +154,13 @@ interface BranchRow {
   `
 })
 export class Branches implements AfterViewInit {
-  branches = ['Heliopolis', 'El Shrouk', 'Nasr City'];
+  private store = inject(MockStore);
+  private dialog = inject(MatDialog);
+  branches: string[] = [];
   filters!: FormGroup;
 
-  displayedColumns = ['branch','hours','departments','peak','staff','tokens','served','missed','cancelled','avgWait','avgDuration'];
-  data: BranchRow[] = Array.from({length: 25}).map((_, i) => ({
-    branch: i % 2 ? 'Heliopolis' : 'El Shrouk',
-    hours: '13 Hours',
-    departments: 19,
-    peak: '7 PM',
-    staff: 16,
-    tokens: 7450 + i,
-    served: 7000 + i,
-    missed: 350,
-    cancelled: 100,
-    avgWait: '17 Min',
-    avgDuration: '25 Min'
-  }));
+  displayedColumns = ['branch','hours','departments','peak','staff','tokens','served','missed','cancelled','avgWait','avgDuration','actions'];
+  data: BranchRow[] = [];
   dataSource = new MatTableDataSource<BranchRow>(this.data);
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
@@ -162,7 +168,14 @@ export class Branches implements AfterViewInit {
 
   constructor(private fb: FormBuilder) {
     this.filters = this.fb.group({
-      branch: [this.branches[0]]
+      branch: [null]
+    });
+
+    effect(() => {
+      const list = this.store.branches();
+      this.branches = list.map(b => b.name);
+      this.data = list.map(b => this.toRow(b));
+      this.dataSource.data = this.data;
     });
   }
 
@@ -172,7 +185,7 @@ export class Branches implements AfterViewInit {
   }
 
   applyFilters() {
-    const branch = this.filters.value.branch;
+    const branch = this.filters.value.branch as string | null;
     this.dataSource.filterPredicate = (row) => branch ? row.branch === branch : true;
     this.dataSource.filter = Math.random().toString();
   }
@@ -180,5 +193,66 @@ export class Branches implements AfterViewInit {
   resetFilters() {
     this.filters.reset({ branch: null });
     this.dataSource.filter = '';
+  }
+
+  openAdd() {
+    const ref = this.dialog.open<BranchDialog, BranchDialogData, BranchDialogData>(BranchDialog, {
+      data: {},
+      width: '640px'
+    });
+    ref.afterClosed().subscribe(res => {
+      if (!res) return;
+      this.store.addBranch({
+        name: res.name!, hours: res.hours, staff: res.staff, tokens: res.tokens, served: res.served,
+        missed: res.missed, cancelled: res.cancelled, avgWait: res.avgWait, avgDuration: res.avgDuration
+      });
+    });
+  }
+
+  openEdit(row: BranchRow) {
+    const br = this.store.branches().find(b => b.name === row.branch);
+    if (!br) return;
+    const ref = this.dialog.open<BranchDialog, BranchDialogData, BranchDialogData>(BranchDialog, {
+      data: { id: br.id, name: br.name, hours: br.hours, staff: br.staff, tokens: br.tokens, served: br.served, missed: br.missed, cancelled: br.cancelled, avgWait: br.avgWait, avgDuration: br.avgDuration },
+      width: '680px'
+    });
+    ref.afterClosed().subscribe(res => {
+      if (!res || !br) return;
+      const { id, ...patch } = res as any;
+      this.store.updateBranch(br.id, patch);
+    });
+  }
+
+  confirmDelete(row: BranchRow) {
+    const br = this.store.branches().find(b => b.name === row.branch);
+    if (!br) return;
+    const ref = this.dialog.open(ConfirmDialog, {
+      data: {
+        title: 'Delete Branch',
+        message: `Are you sure you want to delete "${br.name}"? This will remove related employees as well.`,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      },
+      width: '480px'
+    });
+    ref.afterClosed().subscribe(ok => {
+      if (ok) this.store.deleteBranch(br.id);
+    });
+  }
+
+  private toRow(b: BranchItem): BranchRow {
+    return {
+      branch: b.name,
+      hours: b.hours,
+      departments: b.departments.length,
+      peak: '7 PM',
+      staff: b.staff,
+      tokens: b.tokens,
+      served: b.served,
+      missed: b.missed,
+      cancelled: b.cancelled,
+      avgWait: b.avgWait,
+      avgDuration: b.avgDuration
+    };
   }
 }

@@ -1,4 +1,4 @@
-import { Component, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Sidebar } from '../../components/layout/sidebar/sidebar';
 import { Topbar } from '../../components/layout/topbar/topbar';
@@ -12,6 +12,9 @@ import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MockStore, EmployeeItem } from '../../core/mock-store';
+import { ConfirmDialog } from '../../components/dialogs/confirm-dialog';
 
 interface EmployeeRow {
   name: string;
@@ -44,7 +47,8 @@ interface EmployeeRow {
     MatPaginatorModule,
     MatSortModule,
     MatButtonModule,
-    MatIconModule
+    MatIconModule,
+    MatDialogModule
   ],
   template: `
     <div class="layout">
@@ -57,13 +61,13 @@ interface EmployeeRow {
             <mat-form-field appearance="outline">
               <mat-label>Select Branch</mat-label>
               <mat-select formControlName="branch">
-                <mat-option *ngFor="let b of branches" [value]="b">{{ b }}</mat-option>
+                <mat-option *ngFor="let b of branches" [value]="b.id">{{ b.name }}</mat-option>
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline">
               <mat-label>Select Department</mat-label>
               <mat-select formControlName="department">
-                <mat-option *ngFor="let d of departments" [value]="d">{{ d }}</mat-option>
+                <mat-option *ngFor="let d of departments" [value]="d.id">{{ d.name }}</mat-option>
               </mat-select>
             </mat-form-field>
           </div>
@@ -81,7 +85,7 @@ interface EmployeeRow {
             <span class="primary-text">Employees</span>
             <span class="spacer"></span>
             <button mat-icon-button aria-label="export"><mat-icon>ios_share</mat-icon></button>
-            <button mat-icon-button aria-label="add"><mat-icon>add</mat-icon></button>
+            <button mat-icon-button aria-label="add" (click)="openAdd()"><mat-icon>add</mat-icon></button>
           </div>
           <div class="table elevated">
             <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z0">
@@ -137,6 +141,17 @@ interface EmployeeRow {
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>Staff Efficiency</th>
                 <td mat-cell *matCellDef="let r">{{ r.efficiency }}</td>
               </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef>Actions</th>
+                <td mat-cell *matCellDef="let r">
+                  <button mat-icon-button color="primary" (click)="openEdit(r)" aria-label="Edit">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="confirmDelete(r)" aria-label="Delete">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </td>
+              </ng-container>
 
               <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
               <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
@@ -164,29 +179,29 @@ interface EmployeeRow {
   `
 })
 export class Employees implements AfterViewInit {
-  branches = ['Heliopolis', 'El Shrouk', 'Nasr City'];
-  departments = ['Cheese', 'Meat', 'Seafood', 'Dairy', 'Bakery'];
+  private store = inject(MockStore);
+  private dialog = inject(MatDialog);
+  branches: { id: string; name: string }[] = [];
+  departments: { id: string; name: string; branchId: string }[] = [];
   filters!: FormGroup;
 
-  displayedColumns = ['name','code','role','branch','department','shifts','totalTokens','missedTokens','avgService','totalService','idleTime','satisfaction','efficiency'];
-  data: EmployeeRow[] = [
-    { name: 'Ahmed', code: '5031', role: 'Queue Manager', branch: 'Heliopolis', department: 'Cheese', shifts: '150 Shift', totalTokens: '7450 Token', missedTokens: '350 Token', avgService: '11.5 Min', totalService: '620 Hour', idleTime: '9.5 Hour', satisfaction: '4.5 Star', efficiency: '98 %' },
-    { name: 'Mohamed', code: '2517', role: 'Queue Manager', branch: 'Heliopolis', department: 'Meat', shifts: '150 Shift', totalTokens: '7450 Token', missedTokens: '350 Token', avgService: '11.5 Min', totalService: '620 Hour', idleTime: '9.5 Hour', satisfaction: '4.5 Star', efficiency: '98 %' },
-    { name: 'Hassan', code: '5482', role: 'Queue Manager', branch: 'Heliopolis', department: 'Dairy', shifts: '150 Shift', totalTokens: '7450 Token', missedTokens: '350 Token', avgService: '11.5 Min', totalService: '620 Hour', idleTime: '9.5 Hour', satisfaction: '4.5 Star', efficiency: '98 %' },
-    { name: 'Mahmoud', code: '2863', role: 'Queue Manager', branch: 'Heliopolis', department: 'Seafood', shifts: '150 Shift', totalTokens: '7450 Token', missedTokens: '350 Token', avgService: '11.5 Min', totalService: '620 Hour', idleTime: '9.5 Hour', satisfaction: '4.5 Star', efficiency: '98 %' },
-    { name: 'Alaa', code: '6833', role: 'Queue Manager', branch: 'Heliopolis', department: 'Cheese', shifts: '150 Shift', totalTokens: '7450 Token', missedTokens: '350 Token', avgService: '11.5 Min', totalService: '620 Hour', idleTime: '9.5 Hour', satisfaction: '4.5 Star', efficiency: '98 %' },
-    { name: 'Nader', code: '7525', role: 'Queue Manager', branch: 'Heliopolis', department: 'Meat', shifts: '150 Shift', totalTokens: '7450 Token', missedTokens: '350 Token', avgService: '11.5 Min', totalService: '620 Hour', idleTime: '9.5 Hour', satisfaction: '4.5 Star', efficiency: '98 %' },
-    { name: 'Seif', code: '4742', role: 'Queue Manager', branch: 'Heliopolis', department: 'Dairy', shifts: '150 Shift', totalTokens: '7450 Token', missedTokens: '350 Token', avgService: '11.5 Min', totalService: '620 Hour', idleTime: '9.5 Hour', satisfaction: '4.5 Star', efficiency: '98 %' }
-  ];
+  displayedColumns = ['name','code','role','branch','department','shifts','totalTokens','missedTokens','avgService','totalService','idleTime','satisfaction','efficiency','actions'];
+  data: EmployeeRow[] = [];
   dataSource = new MatTableDataSource<EmployeeRow>(this.data);
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
   constructor(private fb: FormBuilder) {
-    this.filters = this.fb.group({
-      branch: [null],
-      department: [null]
+    this.filters = this.fb.group({ branch: [null], department: [null] });
+
+    effect(() => {
+      const branches = this.store.branches();
+      this.branches = branches.map(b => ({ id: b.id, name: b.name }));
+      this.departments = branches.flatMap(b => b.departments.map(d => ({ id: d.id, name: d.name, branchId: b.id })));
+      const rows = this.store.employees().map(e => this.toRow(e));
+      this.data = rows;
+      this.dataSource.data = rows;
     });
   }
 
@@ -197,14 +212,87 @@ export class Employees implements AfterViewInit {
 
   applyFilters() {
     const { branch, department } = this.filters.value as { branch: string | null; department: string | null };
-    this.dataSource.filterPredicate = (row) =>
-      (branch ? row.branch === branch : true) &&
-      (department ? row.department === department : true);
+    this.dataSource.filterPredicate = (row) => {
+      const okB = branch ? row.branch === (this.branches.find(b => b.id === branch)?.name || '') : true;
+      const okD = department ? row.department === (this.departments.find(d => d.id === department)?.name || '') : true;
+      return okB && okD;
+    };
     this.dataSource.filter = Math.random().toString();
   }
 
   resetFilters() {
     this.filters.reset({ branch: null, department: null });
     this.dataSource.filter = '';
+  }
+
+  openAdd() {
+    const branchOptions = this.branches;
+    import('../../components/dialogs/employee-dialog').then(m => {
+      const ref = this.dialog.open(m.EmployeeDialog, { data: { branchOptions }, width: '640px' });
+      ref.afterClosed().subscribe((res: any) => {
+        if (!res?.name || !res?.code || !res?.role || !res?.branchId || !res?.departmentId) return;
+        this.store.addEmployee({
+          name: res.name, code: res.code, role: res.role, branchId: res.branchId, departmentId: res.departmentId,
+          shifts: res.shifts ?? '0 Shift', totalTokens: res.totalTokens ?? '0 Token', missedTokens: res.missedTokens ?? '0 Token',
+          avgService: res.avgService ?? '0 Min', totalService: res.totalService ?? '0 Hour', idleTime: res.idleTime ?? '0 Hour',
+          satisfaction: res.satisfaction ?? '0 Star', efficiency: res.efficiency ?? '0 %'
+        });
+      });
+    });
+  }
+
+  openEdit(row: EmployeeRow) {
+    const emp = this.store.employees().find(e => e.name === row.name && e.code === row.code);
+    if (!emp) return;
+    const branchOptions = this.branches;
+    import('../../components/dialogs/employee-dialog').then(m => {
+      const ref = this.dialog.open(m.EmployeeDialog, {
+        data: {
+          id: emp.id,
+          name: emp.name, code: emp.code, role: emp.role,
+          branchId: emp.branchId, departmentId: emp.departmentId,
+          branchOptions,
+          shifts: emp.shifts, totalTokens: emp.totalTokens, missedTokens: emp.missedTokens,
+          avgService: emp.avgService, totalService: emp.totalService, idleTime: emp.idleTime,
+          satisfaction: emp.satisfaction, efficiency: emp.efficiency
+        },
+        width: '640px'
+      });
+      ref.afterClosed().subscribe((res: any) => {
+        if (!res?.id) return;
+        const { id, ...patch } = res as any;
+        this.store.updateEmployee(emp.id, patch);
+      });
+    });
+  }
+
+  confirmDelete(row: EmployeeRow) {
+    const emp = this.store.employees().find(e => e.name === row.name && e.code === row.code);
+    if (!emp) return;
+    const ref = this.dialog.open(ConfirmDialog, {
+      data: { title: 'Delete Employee', message: `Delete ${emp.name} (${emp.code})?`, confirmText: 'Delete', cancelText: 'Cancel' },
+      width: '480px'
+    });
+    ref.afterClosed().subscribe(ok => { if (ok) this.store.deleteEmployee(emp.id); });
+  }
+
+  private toRow(e: EmployeeItem): EmployeeRow {
+    const b = this.store.branches().find(x => x.id === e.branchId);
+    const d = b?.departments.find(y => y.id === e.departmentId);
+    return {
+      name: e.name,
+      code: e.code,
+      role: e.role,
+      branch: b?.name || '',
+      department: d?.name || '',
+      shifts: e.shifts,
+      totalTokens: e.totalTokens,
+      missedTokens: e.missedTokens,
+      avgService: e.avgService,
+      totalService: e.totalService,
+      idleTime: e.idleTime,
+      satisfaction: e.satisfaction,
+      efficiency: e.efficiency
+    };
   }
 }

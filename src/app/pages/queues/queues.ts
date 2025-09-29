@@ -1,4 +1,4 @@
-import { Component, ViewChild, AfterViewInit, signal, computed } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Sidebar } from '../../components/layout/sidebar/sidebar';
 import { Topbar } from '../../components/layout/topbar/topbar';
@@ -10,8 +10,14 @@ import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MockStore, BranchItem, QueueItem } from '../../core/mock-store';
+import { ConfirmDialog } from '../../components/dialogs/confirm-dialog';
 
 interface QueueRow {
+  id: string;
+  branchId: string;
+  depId: string;
   branch: string;
   department: string;
   queueName: string;
@@ -22,33 +28,16 @@ interface QueueRow {
   waitingCount: string;
 }
 
-// Shared demo data consistent with other modules
-const BRANCHES = ['Heliopolis', 'El Shrouk', 'Nasr City'];
-const DEPARTMENTS = ['Cheese', 'Meat', 'Seafood', 'Dairy', 'Bakery'];
-
-function buildQueues(): QueueRow[] {
-  const rows: QueueRow[] = [];
-  for (const branch of BRANCHES) {
-    for (const dept of DEPARTMENTS) {
-      // two queues per department
-      for (let i = 1; i <= 2; i++) {
-        const total = 150 + (i * 25);
-        const current = 30 + (i * 5);
-        const waiting = 10 + i * 3;
-        rows.push({
-          branch,
-          department: dept,
-          queueName: `${dept} Queue ${i}`,
-          queueNumber: `${i}`.padStart(2, '0'),
-          currentNumber: `${current}`,
-          totalReserved: `${total} Token`,
-          slotTime: `${10 + i * 2} Min`,
-          waitingCount: `${waiting} Customer`
-        });
-      }
-    }
-  }
-  return rows;
+function fmt(q: QueueItem) {
+  return {
+    id: q.id,
+    queueName: q.name,
+    queueNumber: `${q.number}`.padStart(2, '0'),
+    currentNumber: `${q.currentNumber}`,
+    totalReserved: `${q.totalReserved} Token`,
+    slotTime: `${q.slotTimeMin} Min`,
+    waitingCount: `${q.waitingCount} Customer`
+  };
 }
 
 @Component({
@@ -65,7 +54,8 @@ function buildQueues(): QueueRow[] {
     MatPaginatorModule,
     MatSortModule,
     MatButtonModule,
-    MatIconModule
+    MatIconModule,
+    MatDialogModule
   ],
   template: `
     <div class="layout">
@@ -78,13 +68,13 @@ function buildQueues(): QueueRow[] {
             <mat-form-field appearance="outline">
               <mat-label>Select Branch</mat-label>
               <mat-select formControlName="branch">
-                <mat-option *ngFor="let b of branches" [value]="b">{{ b }}</mat-option>
+                <mat-option *ngFor="let b of branches" [value]="b.id">{{ b.name }}</mat-option>
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline">
               <mat-label>Select Department</mat-label>
               <mat-select formControlName="department">
-                <mat-option *ngFor="let d of filteredDepartments()" [value]="d">{{ d }}</mat-option>
+                <mat-option *ngFor="let d of departmentsFiltered" [value]="d.id">{{ d.name }}</mat-option>
               </mat-select>
             </mat-form-field>
           </div>
@@ -94,6 +84,10 @@ function buildQueues(): QueueRow[] {
               Apply
             </button>
             <button mat-button type="button" (click)="resetFilters()">Reset</button>
+            <button mat-raised-button color="accent" type="button" (click)="openAdd()">
+              <mat-icon>add</mat-icon>
+              Add Queue
+            </button>
           </div>
         </form>
 
@@ -138,6 +132,17 @@ function buildQueues(): QueueRow[] {
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>Waiting List</th>
                 <td mat-cell *matCellDef="let r">{{ r.waitingCount }}</td>
               </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef>Actions</th>
+                <td mat-cell *matCellDef="let r">
+                  <button mat-icon-button color="primary" (click)="openEdit(r)" aria-label="Edit">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="confirmDelete(r)" aria-label="Delete">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </td>
+              </ng-container>
 
               <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
               <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
@@ -164,21 +169,43 @@ function buildQueues(): QueueRow[] {
   `
 })
 export class Queues implements AfterViewInit {
-  branches = BRANCHES;
-  departments = DEPARTMENTS;
+  private store = inject(MockStore);
+  private dialog = inject(MatDialog);
+  branches: { id: string; name: string }[] = [];
+  departments: { id: string; name: string; branchId: string }[] = [];
+  departmentsFiltered: { id: string; name: string; branchId: string }[] = [];
 
   filters!: FormGroup;
-  displayedColumns = ['queueName','queueNumber','branch','department','currentNumber','totalReserved','slotTime','waitingCount'];
-  data: QueueRow[] = buildQueues();
+  displayedColumns = ['queueName','queueNumber','branch','department','currentNumber','totalReserved','slotTime','waitingCount','actions'];
+  data: QueueRow[] = [];
   dataSource = new MatTableDataSource<QueueRow>(this.data);
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
   constructor(private fb: FormBuilder) {
-    this.filters = this.fb.group({
-      branch: [null],
-      department: [null]
+    this.filters = this.fb.group({ branch: [null], department: [null] });
+
+    effect(() => {
+      const branches = this.store.branches();
+      this.branches = branches.map(b => ({ id: b.id, name: b.name }));
+      this.departments = branches.flatMap(b => b.departments.map(d => ({ id: d.id, name: d.name, branchId: b.id })));
+
+      const selectedBranch = this.filters?.value?.branch as string | null;
+      this.departmentsFiltered = selectedBranch
+        ? this.departments.filter(d => d.branchId === selectedBranch)
+        : this.departments;
+
+      const rows: QueueRow[] = branches.flatMap(b => b.departments.flatMap(d => d.queues.map(q => ({
+        id: q.id,
+        branchId: b.id,
+        depId: d.id,
+        branch: b.name,
+        department: d.name,
+        ...fmt(q)
+      }))));
+      this.data = rows;
+      this.dataSource.data = rows;
     });
   }
 
@@ -187,18 +214,85 @@ export class Queues implements AfterViewInit {
     this.dataSource.sort = this.sort;
   }
 
-  filteredDepartments = () => this.departments; // placeholder for cascading if needed
+  // placeholder retained
+  filteredDepartments = () => this.departmentsFiltered;
 
   applyFilters() {
     const { branch, department } = this.filters.value as { branch: string | null; department: string | null };
-    this.dataSource.filterPredicate = (row) =>
-      (branch ? row.branch === branch : true) &&
-      (department ? row.department === department : true);
+    this.dataSource.filterPredicate = (row) => {
+      const okB = branch ? row.branchId === branch : true;
+      const okD = department ? row.depId === department : true;
+      return okB && okD;
+    };
     this.dataSource.filter = Math.random().toString();
   }
 
   resetFilters() {
     this.filters.reset({ branch: null, department: null });
     this.dataSource.filter = '';
+  }
+
+  openAdd() {
+    const branchOptions = this.branches;
+    const selectedBranch = this.filters.value.branch as string | null;
+    const departments = selectedBranch ? this.departments.filter(d => d.branchId === selectedBranch) : this.departments;
+    import('../../components/dialogs/queue-dialog').then(m => {
+      const ref = this.dialog.open(m.QueueDialog, {
+        data: { branchOptions, departmentOptions: departments }, width: '640px'
+      });
+      ref.afterClosed().subscribe((res: any) => {
+        if (!res?.branchId || !res?.departmentId || !res?.name) return;
+        this.store.addQueue(res.branchId, res.departmentId, {
+          name: res.name,
+          number: Number(res.number ?? 1),
+          currentNumber: Number(res.currentNumber ?? 0),
+          totalReserved: Number(res.totalReserved ?? 0),
+          slotTimeMin: Number(res.slotTimeMin ?? 0),
+          waitingCount: Number(res.waitingCount ?? 0)
+        });
+      });
+    });
+  }
+
+  openEdit(row: QueueRow) {
+    const branchOptions = this.branches;
+    const departments = this.departments.filter(d => d.branchId === row.branchId);
+    import('../../components/dialogs/queue-dialog').then(m => {
+      const ref = this.dialog.open(m.QueueDialog, {
+        data: {
+          id: row.id,
+          name: row.queueName,
+          number: Number(row.queueNumber),
+          currentNumber: Number(row.currentNumber),
+          totalReserved: Number(row.totalReserved),
+          slotTimeMin: Number(row.slotTime),
+          waitingCount: Number(row.waitingCount),
+          branchId: row.branchId,
+          departmentId: row.depId,
+          branchOptions,
+          departmentOptions: departments,
+          isEdit: true
+        }, width: '640px'
+      });
+      ref.afterClosed().subscribe((res: any) => {
+        if (!res?.id) return;
+        this.store.updateQueue(row.branchId, row.depId, row.id, {
+          name: res.name,
+          number: Number(res.number ?? 1),
+          currentNumber: Number(res.currentNumber ?? 0),
+          totalReserved: Number(res.totalReserved ?? 0),
+          slotTimeMin: Number(res.slotTimeMin ?? 0),
+          waitingCount: Number(res.waitingCount ?? 0)
+        });
+      });
+    });
+  }
+
+  confirmDelete(row: QueueRow) {
+    const ref = this.dialog.open(ConfirmDialog, {
+      data: { title: 'Delete Queue', message: `Delete ${row.queueName}?`, confirmText: 'Delete', cancelText: 'Cancel' },
+      width: '480px'
+    });
+    ref.afterClosed().subscribe(ok => { if (ok) this.store.deleteQueue(row.branchId, row.depId, row.id); });
   }
 }
